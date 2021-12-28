@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 from requests.exceptions import Timeout
 
@@ -42,10 +43,10 @@ class Utils:
         """
         return str(random.random())[2:17]
 
-    def fetch(self, url, method="get", params=None, json=None, timeout=10):
+    def fetch(self, url, method="get", params=None, data=None, json=None, timeout=10):
         resp = self.session.request(
-            # method, url, params=params, json=json, timeout=timeout, allow_redirects=False, verify=False, proxies={'https': 'http://127.0.0.1:8888'})
-            method, url, params=params, json=json, timeout=timeout, allow_redirects=False)
+            # method, url, params=params, data=data, json=json, timeout=timeout, allow_redirects=False, verify=False, proxies={'https': 'http://127.0.0.1:8888'})
+        method, url, params=params, json=json, timeout=timeout, allow_redirects=False)
         if resp and resp.status_code == requests.codes.ok:
             return resp
         else:
@@ -64,6 +65,7 @@ class Utils:
 
 class WXFilehelper:
     def __init__(self):
+        self.host = "https://szfilehelper.weixin.qq.com"
         self.util = Utils()
 
         if self.wait_login():
@@ -129,7 +131,8 @@ class WXFilehelper:
         }
         try:
             resp = self.util.session.get(
-                "https://login.wx.qq.com/cgi-bin/mmwebwx-bin/login", params=params, timeout=20)
+                # "https://login.wx.qq.com/cgi-bin/mmwebwx-bin/login", params=params, timeout=20, proxies={'https': 'http://127.0.0.1:8888'})
+                "https://login.wx.qq.com/cgi-bin/mmwebwx-bin/login", params=params, timeout=20})
         except Timeout:
             raise Timeout("HTTPRequest timeout")
 
@@ -188,16 +191,40 @@ class WXFilehelper:
             if data['BaseResponse']['Ret'] == 0:
                 nickname = data['User']['NickName']
                 print(f"\rLogin success, Welcome [{nickname}]~", end='\n\n')
+                self.username = data['User']['UserName']
                 self.sync_key = data['SyncKey']
                 return True
             else:
                 raise ValueError("Webwxinit failed")
 
-    def send_msg(self):
+    def send_msg(self, msg_content):
         """
         发送消息
         """
-        pass
+        url = f"{self.host}/cgi-bin/mmwebwx-bin/webwxsendmsg"
+        params = {
+            "lang": "zh_CN",
+            "pass_ticket": self.pass_ticket
+        }
+        msg_id = str(time.time()).replace('.', '') + str(random.randint(0, 9))
+        json_data = json.dumps({"BaseRequest": {"Uin": self.uin, "Sid": self.sid, "Skey": self.skey, "DeviceID": self.util.generator_device_id()},
+                                "Msg": {
+            "ClientMsgId": msg_id,
+            "FromUserName": self.username,
+            "LocalID": msg_id,
+            "ToUserName": "filehelper",
+            "Content": msg_content,
+            "Type": 1},
+            "Scene": 0}, ensure_ascii=False).encode('utf-8')
+        self.util.session.headers.update({"Content-Type": "application/json"})
+        resp = self.util.fetch(
+            url, method="post", params=params, data=json_data)
+        if resp:
+            data = resp.json()
+            if data['BaseResponse']['Ret'] == 0:
+                return True
+            else:
+                raise ValueError("Send msg failed")
 
     def sync_check(self):
         """
@@ -213,6 +240,7 @@ class WXFilehelper:
             'synckey': "|".join([f"{key}_{value}" for key, value in self.sync_key['List']]),
             'mmweb_appid': 'wx_webfilehelper'
         }
+        self.util.session.headers.update({"mmweb_appid": "wx_webfilehelper"})
         resp = self.util.fetch(url, params=params)
         if resp:
             retcode = self.util.match(
@@ -238,18 +266,18 @@ class WXFilehelper:
         resp = self.util.fetch(
             url, method="post", params=params, json=json_data)
         if resp:
-            data = resp.json()
+            # 直接调用 resp.json() 中文消息出现乱码
+            data = json.loads(resp.content.decode('utf-8'))
             if data['BaseResponse']['Ret'] == 0:
                 if data['AddMsgList']:
                     for msg in data['AddMsgList']:
                         if msg['MsgType'] == 1:
                             # 文本消息
-                            # print(msg['Content'])
-                            os.system(msg['Content'])
+                            print(msg['Content'])
+                            self.send_msg(msg['Content'])
                     self.sync_key = data['SyncKey']
             else:
                 raise ValueError("Webwxsync failed")
 
 
 filehelper = WXFilehelper()
-
