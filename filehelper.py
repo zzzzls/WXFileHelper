@@ -46,7 +46,7 @@ class Utils:
     def fetch(self, url, method="get", params=None, data=None, json=None, timeout=10):
         resp = self.session.request(
             # method, url, params=params, data=data, json=json, timeout=timeout, allow_redirects=False, verify=False, proxies={'https': 'http://127.0.0.1:8888'})
-        method, url, params=params, json=json, timeout=timeout, allow_redirects=False)
+            method, url, params=params, data=data, json=json, timeout=timeout, allow_redirects=False)
         if resp and resp.status_code == requests.codes.ok:
             return resp
         else:
@@ -132,7 +132,7 @@ class WXFilehelper:
         try:
             resp = self.util.session.get(
                 # "https://login.wx.qq.com/cgi-bin/mmwebwx-bin/login", params=params, timeout=20, proxies={'https': 'http://127.0.0.1:8888'})
-                "https://login.wx.qq.com/cgi-bin/mmwebwx-bin/login", params=params, timeout=20})
+                "https://login.wx.qq.com/cgi-bin/mmwebwx-bin/login", params=params, timeout=20)
         except Timeout:
             raise Timeout("HTTPRequest timeout")
 
@@ -207,6 +207,7 @@ class WXFilehelper:
             "pass_ticket": self.pass_ticket
         }
         msg_id = str(time.time()).replace('.', '') + str(random.randint(0, 9))
+        # 解决中文乱码问题
         json_data = json.dumps({"BaseRequest": {"Uin": self.uin, "Sid": self.sid, "Skey": self.skey, "DeviceID": self.util.generator_device_id()},
                                 "Msg": {
             "ClientMsgId": msg_id,
